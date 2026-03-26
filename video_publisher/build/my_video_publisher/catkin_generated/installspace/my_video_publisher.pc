@@ -1,0 +1,8 @@
+prefix=/home/orangepi/yolov5_seg_ros/video_publisher/install
+
+Name: my_video_publisher
+Description: Description of my_video_publisher
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

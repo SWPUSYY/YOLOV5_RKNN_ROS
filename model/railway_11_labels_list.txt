@@ -1,0 +1,11 @@
+railway
+car
+trafficsigns
+signallight
+person
+moto
+laneline
+arrow
+fire
+stone
+barricade

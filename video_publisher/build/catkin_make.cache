@@ -1,0 +1,2 @@
+my_video_publisher
+-DCATKIN_DEVEL_PREFIX=/home/orangepi/yolov5_seg_ros/video_publisher/devel -DCMAKE_INSTALL_PREFIX=/home/orangepi/yolov5_seg_ros/video_publisher/install -G Unix Makefiles
