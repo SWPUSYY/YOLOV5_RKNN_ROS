@@ -46,6 +46,9 @@
 #include <pcl/filters/passthrough.h>
 #include <numeric>
 
+#include <thread>
+#include <mutex>
+
 /*-------------------------------------------
             yolov5_seg Function
 -------------------------------------------*/
@@ -99,7 +102,7 @@ int main(int argc, char **argv)
     // }
 
     const char *model_path = argv[1];
-    const char *image_path = argv[2];
+    // const char *image_path = argv[2];
 
     // rknn
     int ret;
