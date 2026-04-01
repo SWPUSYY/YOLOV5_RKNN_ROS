@@ -48,6 +48,26 @@
 
 #include <thread>
 #include <mutex>
+#include <condition_variable>
+#include <atomic>
+
+#include <deque>
+
+struct Image_And_Odresults{
+    cv::Mat img;
+    object_detect_result_list od_results;
+};
+
+std::deque<cv::Mat> d_input_images;
+std::mutex input_image_mtx;
+std::condition_variable input_image_cond;
+
+std::deque<Image_And_Odresults> d_inference_images_and_od_results;
+std::mutex inference_image_mtx;
+std::condition_variable inference_image_cond;
+
+// 全局退出标志
+std::atomic<bool> g_exit_flag(false);
 
 /*-------------------------------------------
             yolov5_seg Function
@@ -66,25 +86,101 @@ void run_yolov5_seg(cv::Mat& src_img, rknn_app_context_t& rknn_app_ctx, object_d
 
     cv::cvtColor(src_img, src_img, cv::COLOR_RGB2BGR);
 
-    // draw_mask_and_box_test(src_img, od_results, start_time);
-    draw_mask_and_box(src_img, od_results, start_time, "video");
+    Image_And_Odresults image_and_odresults;
+    image_and_odresults.img = src_img;
+    image_and_odresults.od_results = od_results;
+
+    std::unique_lock<std::mutex> u_lock(inference_image_mtx);
+    {
+        d_inference_images_and_od_results.emplace_back(std::move(image_and_odresults));
+    }
+    inference_image_cond.notify_one();
 }
 
 /*-------------------------------------------
              image_msg callback
 -------------------------------------------*/
 
-void imageCallback(const sensor_msgs::ImageConstPtr& msg, 
-    rknn_app_context_t& rknn_app_ctx, object_detect_result_list& od_results){
+void imageCallback(const sensor_msgs::ImageConstPtr& msg){
     try{
         // 转换ROS图像消息为OpenCV格式
         cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
         cv::Mat frame = cv_ptr->image;
 
-        run_yolov5_seg(frame, rknn_app_ctx, od_results);
+        std::unique_lock<std::mutex> u_lock(input_image_mtx);
+        {
+            d_input_images.emplace_back(std::move(frame));
+        }
+        input_image_cond.notify_one();
+        
+        // run_yolov5_seg(frame, rknn_app_ctx, od_results);
     }
     catch(cv_bridge::Exception& e){
         ROS_ERROR("cv_bridge exception: %s", e.what());
+    }
+}
+
+void run_yolov5_seg_loop(rknn_app_context_t& rknn_app_ctx, object_detect_result_list& od_results){
+    cv::Mat frame;
+    while(!g_exit_flag){
+        std::unique_lock<std::mutex> u_lock(input_image_mtx);
+        {
+            // 设置条件变量等待
+            input_image_cond.wait(u_lock, [](){
+                return !d_input_images.empty() || g_exit_flag;
+            });
+            if(g_exit_flag)
+                break;
+
+            frame = std::move(d_input_images.front());
+            d_input_images.pop_front();
+        }
+        run_yolov5_seg(frame, rknn_app_ctx, od_results);
+    }
+}
+
+void get_frame_from_ros(ros::NodeHandle nh){
+    image_transport::ImageTransport it(nh);
+    image_transport::Subscriber image_sub = 
+        it.subscribe("video/image", 1, boost::bind(imageCallback, _1));
+
+    // 使用ROS自带的多线程工具
+    ros::AsyncSpinner spinner(1);
+    spinner.start();
+
+    while(ros::ok() && !g_exit_flag){
+        ros::spinOnce();
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
+    }
+
+    spinner.stop();
+    
+    // ros::spin();
+}
+
+void draw_mask_and_box_loop(){
+    Image_And_Odresults image_and_odresults;
+    cv::Mat frame;
+    object_detect_result_list od_results;
+
+    while(!g_exit_flag){
+        struct timeval start_time, stop_time;
+        gettimeofday(&start_time, NULL);
+
+        std::unique_lock<std::mutex> u_lock(inference_image_mtx);
+        inference_image_cond.wait(u_lock, [](){
+            return !d_inference_images_and_od_results.empty();
+        });
+
+        {
+            image_and_odresults = std::move(d_inference_images_and_od_results.front());
+            d_inference_images_and_od_results.pop_front();
+        }
+
+        frame = image_and_odresults.img;
+        od_results = std::move(image_and_odresults.od_results);
+        draw_mask_and_box(frame, od_results, start_time, "video");
+        // draw_mask_and_box_test(frame, *od_results, start_time);
     }
 }
 
@@ -95,16 +191,9 @@ int main(int argc, char **argv)
 {
     std::cout << " ROS cv and lidar " << std::endl;
 
-    // if (argc != 3)
-    // {
-    //     printf("%s <model_path> <image_path>\n", argv[0]);
-    //     return -1;
-    // }
-
     const char *model_path = argv[1];
-    // const char *image_path = argv[2];
 
-    // rknn
+    // rknn init
     int ret;
     rknn_app_context_t rknn_app_ctx;
     memset(&rknn_app_ctx, 0, sizeof(rknn_app_context_t));
@@ -117,28 +206,39 @@ int main(int argc, char **argv)
         printf("init_yolov5_seg_model fail! ret=%d model_path=%s\n", ret, model_path);
     }
 
-    if (ret != 0)
-    {
-        printf("read image fail! ret=%d image_path=%s\n", ret, image_path);
-    }
-
     object_detect_result_list od_results;
 
-    cv::Mat src_img = cv::imread(image_path);
-
-    // ros subscriber
-
+    // ros init
     ros::init(argc, argv, "rknn_yolov5_demo");
 	ros::NodeHandle nh;
 
-    image_transport::ImageTransport it(nh);
-    image_transport::Subscriber image_sub = 
-        it.subscribe("video/image", 1, boost::bind(imageCallback, _1, rknn_app_ctx, od_results));
+    std::thread get_frame_from_ros_thread(get_frame_from_ros, nh);
+    std::thread run_yolov5_seg_loop_thread(run_yolov5_seg_loop, std::ref(rknn_app_ctx), std::ref(od_results));
+    std::thread draw_mask_and_box_loop_thread(draw_mask_and_box_loop);
 
-    ros::spin();
+    // 等待ROS关闭
+    ros::waitForShutdown();
+
+    // 通知所有线程退出
+    g_exit_flag = true;
+    input_image_cond.notify_all();
+    inference_image_cond.notify_all();
+
+    // 等待所有线程结束
+    get_frame_from_ros_thread.join();
+    run_yolov5_seg_loop_thread.join();
+    draw_mask_and_box_loop_thread.join();
+
+
+    // image_transport::ImageTransport it(nh);
+    // image_transport::Subscriber image_sub = 
+    //     it.subscribe("video/image", 1, boost::bind(imageCallback, _1, rknn_app_ctx, od_results));
+
+    // ros::spin();
 
     // run_yolov5_seg(src_img, rknn_app_ctx, od_results);
 
+    // 清理资源
     deinit_post_process();
 
     ret = release_yolov5_seg_model(&rknn_app_ctx);

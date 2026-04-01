@@ -1940,4 +1940,7 @@ CMakeFiles/yolov5seg_video.dir/src/main.cc.o: \
  /usr/include/pcl-1.12/pcl/common/impl/transforms.hpp \
  /usr/include/pcl-1.12/pcl/filters/passthrough.h \
  /usr/include/pcl-1.12/pcl/filters/filter_indices.h \
- /usr/include/pcl-1.12/pcl/filters/filter.h
+ /usr/include/pcl-1.12/pcl/filters/filter.h /usr/include/c++/11/thread \
+ /usr/include/c++/11/bits/std_thread.h \
+ /usr/include/c++/11/bits/this_thread_sleep.h \
+ /usr/include/c++/11/condition_variable

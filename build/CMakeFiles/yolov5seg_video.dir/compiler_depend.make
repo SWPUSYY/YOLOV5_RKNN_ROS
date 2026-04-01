@@ -2184,7 +2184,11 @@ CMakeFiles/yolov5seg_video.dir/src/main.cc.o: ../src/main.cc \
   /usr/include/pcl-1.12/pcl/common/impl/transforms.hpp \
   /usr/include/pcl-1.12/pcl/filters/passthrough.h \
   /usr/include/pcl-1.12/pcl/filters/filter_indices.h \
-  /usr/include/pcl-1.12/pcl/filters/filter.h
+  /usr/include/pcl-1.12/pcl/filters/filter.h \
+  /usr/include/c++/11/thread \
+  /usr/include/c++/11/bits/std_thread.h \
+  /usr/include/c++/11/bits/this_thread_sleep.h \
+  /usr/include/c++/11/condition_variable
 
 CMakeFiles/yolov5seg_video.dir/src/postprocess.cc.o: ../src/postprocess.cc \
   /usr/include/stdc-predef.h \
@@ -3153,7 +3157,13 @@ CMakeFiles/yolov5seg_video.dir/src/yolov5_seg.cc.o: ../src/yolov5_seg.cc \
 
 /usr/include/getopt.h:
 
+/usr/include/c++/11/bits/this_thread_sleep.h:
+
+/usr/include/c++/11/bits/std_thread.h:
+
 /usr/include/pcl-1.12/pcl/common/eigen.h:
+
+/usr/include/c++/11/thread:
 
 /usr/include/boost/fusion/view/filter_view/detail/size_impl.hpp:
 
@@ -4134,6 +4144,8 @@ CMakeFiles/yolov5seg_video.dir/src/yolov5_seg.cc.o: ../src/yolov5_seg.cc \
 /opt/ros/noetic/include/ros/timer_options.h:
 
 /opt/ros/noetic/include/ros/timer.h:
+
+/usr/include/c++/11/condition_variable:
 
 /opt/ros/noetic/include/ros/service_traits.h:
 
